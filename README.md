@@ -5,7 +5,7 @@
 # EasyPlaces
 ![](https://github.com/user-attachments/assets/f728a53e-3050-46d7-b6ee-14b0071b0114)
 
-Navigation and coordinate recording apps for Android and Windows, with direct local synchronization. The Windows application acts as the server (it must be running for synchronization).
+Simple navigation and coordinate recording apps for Android and Windows, with direct local synchronization. The Windows application acts as the server (it must be running for synchronization).
 
 ## Features
 The following languages ​​are supported: English, Russian, Chinese (Simplified/Traditional), Spanish, Portuguese (Brazilian Portuguese), French, German, Japanese, Arabic, Italian, Korean and Turkish.
