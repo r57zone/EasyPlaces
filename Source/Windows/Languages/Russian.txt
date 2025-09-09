@@ -1,0 +1,37 @@
+# Main
+NAME=Название:
+COORDINATES=Координаты:
+RADIUS=Радиус:
+DISTANCE_UNIT_SMALL=м.
+CATEGORY=Категория:
+SEARCH=Поиск...
+SYNC=Синхронизация
+DEV_SYNC_CONFIRM=Устройство "%s" запрашивает разрешение на синхронизацию. Разрешить?
+LAST_UPDATE=Последнее обновление:
+NO_CATEGORIES=Нет категорий.
+COORDINATES_INCORRECT=Координаты не заданы или некорректны.
+
+# Settings
+SETTINGS=Настройки
+INTERFACE=Интерфейс
+DARK_THEME=Тёмная тема
+THEME_TIME=Тема в зависимости от времени
+DARK_THEME_START=Начало тёмной темы:
+DARK_THEME_END=Конец тёмной темы:
+SYNCHRONIZATION=Синхронизация
+SYNC_PORT=Порт:
+SYNC_WITH_ANY_IPS=Синхронизация с любыми IP (небезопасно)
+ALLOW_IPS=Разрешённые IP адреса:
+ALLOW_DEVS=Разрешённые устройства:
+ALLOW_DEV_REM=Удалить
+ENTER_DEV_ID=Введите ID устройства
+BLOCK_REQUEST_NEW_DEVS=Блокировать запросы новых устройств
+PLACES=Места
+IMPORT=Импорт
+EXPORT=Экспорт
+CATEGORIES=Категории
+USER_CATEGORIES=Места\nРабота\nПокупки\nЕда\nОтдых\nПутешествия\nВременное
+CATEGORIES_AT_RUN=Категории при запуске
+DONE=Готово
+OK=ОК
+CANCEL=Отмена

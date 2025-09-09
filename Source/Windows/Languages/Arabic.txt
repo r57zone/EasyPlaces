@@ -1,0 +1,37 @@
+# Main
+NAME=الاسم:
+COORDINATES=الإحداثيات:
+RADIUS=نصف القطر:
+DISTANCE_UNIT_SMALL=م.
+CATEGORY=الفئة:
+SEARCH=بحث...
+SYNC=مزامنة
+DEV_SYNC_CONFIRM=الجهاز "%s" يطلب إذن للمزامنة. هل تسمح بذلك؟
+LAST_UPDATE=آخر تحديث:
+NO_CATEGORIES=لا توجد فئات.
+COORDINATES_INCORRECT=الإحداثيات غير محددة أو غير صحيحة.
+
+# Settings
+SETTINGS=الإعدادات
+INTERFACE=الواجهة
+DARK_THEME=الوضع الداكن
+THEME_TIME=الوضع حسب الوقت
+DARK_THEME_START=بداية الوضع الداكن:
+DARK_THEME_END=نهاية الوضع الداكن:
+SYNCHRONIZATION=المزامنة
+SYNC_PORT=المنفذ:
+SYNC_WITH_ANY_IPS=المزامنة مع أي عنوان IP (غير آمن)
+ALLOW_IPS=عناوين IP المسموح بها:
+ALLOW_DEVS=الأجهزة المسموح بها:
+ALLOW_DEV_REM=إزالة
+ENTER_DEV_ID=أدخل معرف الجهاز
+BLOCK_REQUEST_NEW_DEVS=حظر طلبات الأجهزة الجديدة
+PLACES=الأماكن
+IMPORT=استيراد
+EXPORT=تصدير
+CATEGORIES=الفئات
+USER_CATEGORIES=الأماكن\nالعمل\nالتسوق\nالطعام\nالترفيه\nالسفر\nمؤقت
+CATEGORIES_AT_RUN=الفئات عند بدء التشغيل
+DONE=تم
+OK=موافق
+CANCEL=إلغاء

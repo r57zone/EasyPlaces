@@ -1,0 +1,37 @@
+# Main
+NAME=名前:
+COORDINATES=座標:
+RADIUS=半径:
+DISTANCE_UNIT_SMALL=ｍ
+CATEGORY=カテゴリ:
+SEARCH=検索...
+SYNC=同期
+DEV_SYNC_CONFIRM="％s" デバイスが同期の許可を要求しています。許可しますか？
+LAST_UPDATE=最終更新:
+NO_CATEGORIES=カテゴリがありません。
+COORDINATES_INCORRECT=座標が指定されていないか、正しくありません。
+
+# Settings
+SETTINGS=設定
+INTERFACE=インターフェース
+DARK_THEME=ダークテーマ
+THEME_TIME=時間依存テーマ
+DARK_THEME_START=ダークテーマ開始時間:
+DARK_THEME_END=ダークテーマ終了時間:
+SYNCHRONIZATION=同期
+SYNC_PORT=ポート:
+SYNC_WITH_ANY_IPS=任意のIPとの同期（安全ではありません）
+ALLOW_IPS=許可されたIPアドレス:
+ALLOW_DEVS=許可されたデバイス:
+ALLOW_DEV_REM=削除
+ENTER_DEV_ID=デバイスIDを入力
+BLOCK_REQUEST_NEW_DEVS=新しいデバイスのリクエストをブロック
+PLACES=場所
+IMPORT=インポート
+EXPORT=エクスポート
+CATEGORIES=カテゴリ
+USER_CATEGORIES=場所\n仕事\nショッピング\n食べ物\nレジャー\n旅行\n一時的
+CATEGORIES_AT_RUN=起動時のカテゴリ
+DONE=完了
+OK=OK
+CANCEL=キャンセル

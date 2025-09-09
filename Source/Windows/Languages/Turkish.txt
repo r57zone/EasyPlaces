@@ -1,0 +1,37 @@
+# Main
+NAME=Ad:
+COORDINATES=Koordinatlar:
+RADIUS=Yarıçap:
+DISTANCE_UNIT_SMALL=m
+CATEGORY=Kategori:
+SEARCH=Ara...
+SYNC=Senkranize Et
+DEV_SYNC_CONFIRM="%s" cihazı senkronizasyon izni istiyor. İzin verilsin mi?
+LAST_UPDATE=Son güncelleme:
+NO_CATEGORIES=Kategori yok.
+COORDINATES_INCORRECT=Koordinatlar belirtilmemiş veya yanlış.
+
+# Settings
+SETTINGS=Ayarlar
+INTERFACE=Arayüz
+DARK_THEME=Koyu tema
+THEME_TIME=Tema zaman bağımlı
+DARK_THEME_START=Koyu tema başlama:
+DARK_THEME_END=Koyu tema bitiş:
+SYNCHRONIZATION=Senkronizasyon
+SYNC_PORT=Port:
+SYNC_WITH_ANY_IPS=Herhangi bir IP ile senkronizasyon (güvenli değil)
+ALLOW_IPS=İzin verilen IP adresleri:
+ALLOW_DEVS=İzin verilen cihazlar:
+ALLOW_DEV_REM=Kaldır
+ENTER_DEV_ID=Cihaz ID'si girin
+BLOCK_REQUEST_NEW_DEVS=Yeni cihaz taleplerini engelle
+PLACES=Mekanlar
+IMPORT=İçe Aktar
+EXPORT=Dışa Aktar
+CATEGORIES=Kategoriler
+USER_CATEGORIES=Mekanlar\nİş\nAlışveriş\nYemek\nBoş Zaman\nSeyahat\nGeçici
+CATEGORIES_AT_RUN=Başlangıçtaki kategoriler
+DONE=Tamamlandı
+OK=Tamam
+CANCEL=İptal

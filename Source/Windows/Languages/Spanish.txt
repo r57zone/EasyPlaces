@@ -1,0 +1,37 @@
+# Main
+NAME=Nombre:
+COORDINATES=Coordenadas:
+RADIUS=Radio:
+DISTANCE_UNIT_SMALL=m
+CATEGORY=Categoría:
+SEARCH=Buscar...
+SYNC=Sincronizar
+DEV_SYNC_CONFIRM=El dispositivo "%s" solicita permiso para sincronizar. ¿Permitir?
+LAST_UPDATE=Última actualización:
+NO_CATEGORIES=No hay categorías.
+COORDINATES_INCORRECT=Las coordenadas no están especificadas o son incorrectas.
+
+# Settings
+SETTINGS=Configuración
+INTERFACE=Interfaz
+DARK_THEME=Tema oscuro
+THEME_TIME=Tema dependiente del tiempo
+DARK_THEME_START=Inicio del tema oscuro:
+DARK_THEME_END=Fin del tema oscuro:
+SYNCHRONIZATION=Sincronización
+SYNC_PORT=Puerto:
+SYNC_WITH_ANY_IPS=Sincronización con cualquier IP (no seguro)
+ALLOW_IPS=Direcciones IP permitidas:
+ALLOW_DEVS=Dispositivos permitidos:
+ALLOW_DEV_REM=Eliminar
+ENTER_DEV_ID=Ingrese el ID del dispositivo
+BLOCK_REQUEST_NEW_DEVS=Bloquear solicitudes de nuevos dispositivos
+PLACES=Lugares
+IMPORT=Importar
+EXPORT=Exportar
+CATEGORIES=Categorías
+USER_CATEGORIES=Lugares\nTrabajo\nCompras\nComida\nOcio\nViajes\nTemporal
+CATEGORIES_AT_RUN=Categorías al iniciar
+DONE=Hecho
+OK=OK
+CANCEL=Cancelar

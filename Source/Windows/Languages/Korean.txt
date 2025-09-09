@@ -1,0 +1,37 @@
+# Main
+NAME=이름:
+COORDINATES=좌표:
+RADIUS=반경:
+DISTANCE_UNIT_SMALL=m
+CATEGORY=카테고리:
+SEARCH=검색...
+SYNC=동기화
+DEV_SYNC_CONFIRM=장치 "%s"가 동기화 권한을 요청합니다. 허용하시겠습니까?
+LAST_UPDATE=마지막 업데이트:
+NO_CATEGORIES=카테고리가 없습니다.
+COORDINATES_INCORRECT=좌표가 지정되지 않았거나 올바르지 않습니다.
+
+# Settings
+SETTINGS=설정
+INTERFACE=인터페이스
+DARK_THEME=다크 테마
+THEME_TIME=시간에 따른 테마
+DARK_THEME_START=다크 테마 시작:
+DARK_THEME_END=다크 테마 종료:
+SYNCHRONIZATION=동기화
+SYNC_PORT=포트:
+SYNC_WITH_ANY_IPS=모든 IP와 동기화 (안전하지 않음)
+ALLOW_IPS=허용된 IP 주소:
+ALLOW_DEVS=허용된 장치:
+ALLOW_DEV_REM=제거
+ENTER_DEV_ID=장치 ID 입력
+BLOCK_REQUEST_NEW_DEVS=새 장치 요청 차단
+PLACES=장소
+IMPORT=가져오기
+EXPORT=내보내기
+CATEGORIES=카테고리
+USER_CATEGORIES=장소\n업무\n쇼핑\n음식\n여가\n여행\n임시
+CATEGORIES_AT_RUN=시작 시 카테고리
+DONE=완료
+OK=확인
+CANCEL=취소
