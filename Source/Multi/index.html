@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html data-theme="default">
+<!-- <html data-theme="default" manifest="app.manifest"> iOS < 13 -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>EasyPlaces</title>
+<meta name="color-scheme" content="dark">
+<meta name="author" content="r57zone">
+<meta name="apple-mobile-web-app-title" content="EasyPlaces">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!--<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />-->
+<link rel="apple-touch-icon" href="icons/icon-76.png">
+<link rel="apple-touch-icon" sizes="72x72" href="icons/icon-72.png">
+<link rel="apple-touch-icon" sizes="76x76" href="icons/icon-76.png">
+<link rel="apple-touch-icon" sizes="114x114" href="icons/icon-114.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
+<link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180x180.png">
+<!--<link rel="apple-touch-startup-image" href="images/launch.png">-->
+<link rel="stylesheet" href="style.css">
+<script src="langs.js"></script>
+<script type="text/javascript">
+	const PlatformAndroid = 0;
+	const PlatformIOS = 1;
+	const PlatformWindows = 2;
+	let DevicePlatform = -1;
+	let PlatformNames = ['Android', 'iOS', 'Windows'];
+	let UseManualAddress = true; // Ручной ввод адреса
+	let IsPWA = false; // Ручной ввод адреса
+	let IsWindowsClient = false;
+	
+	let FirstRun = false;
+	let DeviceID;
+	let TabletMode = false;
+	let AutoStartNav = true;
+
+	let PlacesAr = [];
+	let ActionsAr = [];
+	
+	let CurPlaceID = -1; // По умолчанию новая заметка
+	let CurTarget = { lat: 0, lon: 0 }
+	let LatestPlace;
+	let LatestPlaceName;
+	let LatestPlaceCat;
+	let CurPlaceDateTime;
+	let GetCurrentRadius = 0;
+	let AccumulatedCompassAngle = 0;
+	let AccumulatedArrowAngle = 0;
+
+	let WatchId = null;
+	let NavInverse = false;
+	let UseCompass = true;
+	let PrevUseCompass = false;
+	
+	const AverageSpeed = {
+		walk: 83.33, //5 * 1000 / 60 (км/ч -> м/мин)
+		bike: 250, // 15 * 1000 / 60,
+		car: 750, // 45 * 1000 / 60
+		bus: 333.33 // 20 км/ч
+	};
+	
+	let DistanceTimeMode = 0;
+	
+	let SyncWait = false;
+
+	let UpdateDateTime = true;
+	
+	let HideFirstNotifyError = true; // На замену navigator.onLine (постоянно стала возвращать true на Android), для iOS ставим true
+	
+	// Настройки для Android
+	let ServerAddress; // Для вывода в настройках
+	let ServerPort; // Храним для автопоиска
+	let SyncAddress; // Полный адрес для синхронизации
+	let AutoSearchIP = false;
+	
+	let SearchShown = false;
+	let Categories = [];
+	let CategoriesShownList = false;
+	let LastSearchValue = '';
+	
+	let DarkThemeStartHour = 18;
+	let DarkThemeEndHour = 8;
+	
+	let CategoriesAtRun = false;
+	let CategoriesAtRunOnce = false; // Показать категории один раз, если включена синхронизация при запуске
+	
+	// Кеширование платформы
+	if (localStorage.getItem('DevicePlatform') == null) {
+		// Автоопределение платформы
+		if (/Android/i.test(window.navigator.userAgent))
+			DevicePlatform = PlatformAndroid;
+		else if (/iPhone|iPod|iPad/i.test(window.navigator.userAgent))
+			DevicePlatform = PlatformIOS;
+		else if (/Edg/.test(navigator.userAgent))
+			DevicePlatform = PlatformWindows;
+		localStorage.setItem('DevicePlatform', DevicePlatform);
+	} else
+		DevicePlatform = localStorage.getItem('DevicePlatform');
+		
+	// Дополнительные стили
+	function AddCSSFile(cssFile) {
+		let cssFiles = [location.pathname.split('/').pop().replace(/\.\w+$/, '.css'), cssFile];
+		cssFiles.forEach(function(file) {
+			let link = document.createElement('link');
+			link.href = file;
+			link.type = 'text/css';
+			link.rel = 'stylesheet';
+			link.media = 'screen,print';
+			document.head.appendChild(link);
+		});
+	}
+	if (DevicePlatform == PlatformIOS)
+		AddCSSFile('ios.css');
+	else // Android / Windows / Web
+		AddCSSFile('any.css');
+	if (IsWindowsClient && DevicePlatform == PlatformWindows)
+		AddCSSFile('windows.css');
+		
+	//console.log(PlatformNames[DevicePlatform]);
+	
+	function GetAzimuth(lat1, lon1, lat2, lon2) {
+		let dLon = (lon2 - lon1) * Math.PI / 180;
+		lat1 = lat1 * Math.PI / 180;
+		lat2 = lat2 * Math.PI / 180;
+		let y = Math.sin(dLon) * Math.cos(lat2);
+		let x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+		let brng = Math.atan2(y, x);
+		return (brng * 180 / Math.PI + 360) % 360;
+	}
+
+	function GetDistance(lat1, lon1, lat2, lon2) {
+		const R = 6371000; // метров
+		const dLat = (lat2 - lat1) * Math.PI / 180;
+		const dLon = (lon2 - lon1) * Math.PI / 180;
+		const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+			Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+			Math.sin(dLon/2) * Math.sin(dLon/2);
+		const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		return Math.round(R * c);
+	}
+	
+	function FormatTimeHM(minutes) {
+		let total = Math.round(minutes);
+		let days = Math.floor(total / 1440); // 1440 минут в сутках
+		let hours = Math.floor((total % 1440) / 60);
+		let mins = total % 60;
+
+		let hStr = (hours < 10 ? '0' : '') + hours;
+		let mStr = (mins < 10 ? '0' : '') + mins;
+
+		if (days > 0)
+			return days + '.' + hStr + ':' + mStr;
+		else
+			return hStr + ':' + mStr;
+	}
+	
+	function normalizeAngle(angle) {
+		return (angle + 360) % 360;
+	}
+
+	// Кратчайшее смещение между углами
+	function shortestAngleDiff(from, to) {
+		let diff = to - from;
+		if (diff > 180) diff -= 360;
+		else if (diff < -180) diff += 360;
+		return diff;
+	}
+
+	// Функция для вычисления нового аккумулированного угла с минимальным поворотом
+	function getAccumulatedAngle(accumulatedAngle, targetAngle) {
+		targetAngle = normalizeAngle(targetAngle);
+		let currentMod = normalizeAngle(accumulatedAngle);
+		let diff = shortestAngleDiff(currentMod, targetAngle);
+		return accumulatedAngle + diff;
+	}
+	
+	function UpdateDistance(distance) {
+		let speed, icon;
+
+		switch (DistanceTimeMode) {
+			case 0: // Пешеход
+				speed = AverageSpeed.walk;
+				icon = '🚶';
+				break;
+			case 1: // Велосипед
+				speed = AverageSpeed.bike;
+				icon = '🚴';
+				break;
+			case 2: // Машина
+				speed = AverageSpeed.car;
+				icon = '🚗';
+				break;
+			case 3: // Автобус
+				speed = AverageSpeed.bus;
+				icon = '🚌 🚎 🚋';
+				break;
+			case 4: // Автобус обратный
+				speed = AverageSpeed.bus;
+				icon = '🔁 🚌 🚎 🚋';
+				break;
+			default: // По умолчанию пешеход
+				speed = AverageSpeed.walk;
+				icon = '🚶';
+		}
+
+		document.getElementById('PlaceDistanceTime').innerHTML = icon + ' ' + FormatTimeHM(distance / speed); // в минутах
+	}
+
+	function UpdatePosition(pos) {
+		let lat = pos.coords.latitude;
+		let lon = pos.coords.longitude;
+		
+		let heading = pos.coords.heading;
+
+		let Azimuth = GetAzimuth(lat, lon, CurTarget.lat, CurTarget.lon);
+		let Distance = GetDistance(lat, lon, CurTarget.lat, CurTarget.lon);
+		UpdateDistance(Distance);
+		
+		let DistanceText = '';
+		if (Distance > 999) {
+			let DistanceValue = Distance / 1000;
+			// округляем до 1 знака, но сразу преобразуем в число, чтобы убрать лишний ноль
+			DistanceValue = parseFloat(DistanceValue.toFixed(1));
+			DistanceText = DistanceValue + ' ' + IDS_DISTANCE_UNIT_LARGE;
+		} else
+			DistanceText = Distance + ' ' + IDS_DISTANCE_UNIT_SMALL;
+
+
+		// Вращение компаса
+		if (UseCompass == false) {
+			if (heading !== null) {
+				let compassRotation = NavInverse ? -(heading + 180) % 360 : -heading;
+				AccumulatedCompassAngle = getAccumulatedAngle(AccumulatedCompassAngle, compassRotation);
+				document.getElementById('compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
+			} else {
+				AccumulatedCompassAngle = 0;
+				document.getElementById('compass').style.transform = 'rotate(0deg)';
+			}
+		}
+
+		// Вращение стрелки
+		AccumulatedArrowAngle = getAccumulatedAngle(AccumulatedArrowAngle, Azimuth);
+		document.getElementById('Arrow').style.transform = 'rotate(' + AccumulatedArrowAngle + 'deg)';
+
+		document.getElementById('Arrow').style.display = GetCurrentRadius / 2 > Distance ? 'none' : 'block';
+		
+		document.getElementById('PlaceDistance').innerHTML = DistanceText;
+	}
+	
+	function handleOrientation(event) {
+		if (!UseCompass) return;
+
+		let angle = null;
+
+		// Предпочтение deviceorientationabsolute, если есть
+		if (event.absolute === true && event.alpha !== null)
+			angle = event.alpha;
+		// Специально для iOS (Safari)
+		else if (event.webkitCompassHeading !== undefined)
+			angle = event.webkitCompassHeading;
+		// Резервный вариант
+		else if (event.alpha !== null)
+			angle = event.alpha;
+
+		// Поворачиваем элемент
+		if (angle !== null) {
+			AccumulatedCompassAngle = getAccumulatedAngle(AccumulatedCompassAngle, -angle);
+			document.getElementById('compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
+		}
+	}
+
+	function StartNavigation() {
+		//if (DevicePlatform == PlatformIOS)
+				//iOSRequestRights();
+		let CoordsTemp = document.getElementById('Coords').value.trim();
+		if (CoordsTemp == '' || CoordsTemp.indexOf(',') === -1) return;
+		CoordsTemp = CoordsTemp.split(',');
+		
+		CurTarget.lat = parseFloat(CoordsTemp[0].trim());
+		CurTarget.lon = parseFloat(CoordsTemp[1].trim());
+		
+		// Сброс поворотов
+		AccumulatedCompassAngle = 0;
+		AccumulatedArrowAngle = 0;
+		
+		//alert(CurTarget.lat + '\n' + CurTarget.lon);
+		if (navigator.geolocation) {
+			document.getElementById('StartStopNav').innerHTML = IDS_STOP
+			document.getElementById('StatusNav').innerText = IDS_ON;
+			WatchId = navigator.geolocation.watchPosition(UpdatePosition, err => {
+				//alert('GPS error: ' + err.message);
+			}, {
+				enableHighAccuracy: true,
+				maximumAge: 1000
+			});
+		}
+	}
+
+	function StopNavigation() {
+		if (WatchId !== null) {
+			navigator.geolocation.clearWatch(WatchId);
+			WatchId = null;
+			document.getElementById('StatusNav').innerText = IDS_OFF;
+			document.getElementById('StartStopNav').innerHTML = IDS_START;
+		}
+	}
+	
+	/*function iOSRequestRights() {
+		if (DevicePlatform != PlatformIOS) return;
+
+		// Разрешение на компас/гиро (iOS 13+)
+		try {
+			if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+				DeviceOrientationEvent.requestPermission()
+				.then(function(state){
+					if (state === 'granted')
+						alert('Спасибо! Доступ к компасу разрешён ✅');
+					else
+						alert('Ошибка: доступ к компасу отклонён ❌');
+				})
+				.catch(function(){});
+			}
+		// Для движения:
+		if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
+			DeviceMotionEvent.requestPermission().catch(function(){});
+		} catch (e) {}
+
+		// Геолокация — один раз дергаем, чтобы показать системный диалог
+		try {
+			if (navigator.geolocation) {
+				navigator.geolocation.getCurrentPosition(
+					function(){}, function(){},
+					{ enableHighAccuracy: true, maximumAge: 0, timeout: 1000 }
+				);
+			}
+		} catch (e) {}
+	}*/
+	
+	function StartStopNavigation() {
+		if (WatchId == null)
+			StartNavigation();
+		else
+			StopNavigation();
+	}
+	
+	function SwapDistanceTimeMode(ChangeMode) {
+		if (ChangeMode)
+			DistanceTimeMode++;
+		if (DistanceTimeMode > (UseCompass ? 3 : 4)) DistanceTimeMode = 0;
+		NavInverse = DistanceTimeMode == 4;
+		UpdateDistance(0);
+		if (ChangeMode)
+			localStorage.setItem('DistanceTimeMode', DistanceTimeMode);
+	}
+
+	function GetCurrentCoords() {
+		navigator.geolocation.getCurrentPosition(function(pos) {
+			let lat = pos.coords.latitude.toFixed(7); // Вплоть до см
+			let lon = pos.coords.longitude.toFixed(7);
+			document.getElementById('Coords').value = lat + ', ' + lon;
+		}, function(err) {
+			//alert('Ошибка GPS: ' + err.message);
+		}, {
+			enableHighAccuracy: true,
+			maximumAge: 1000
+		});
+	}
+	
+	function GetUTCTimeStamp() // Со смещением UTC зоны
+	{
+		let CurDate = new Date;
+		return Math.floor(Date.UTC(CurDate.getFullYear(), CurDate.getMonth(), CurDate.getDate(), CurDate.getHours(), CurDate.getMinutes(), CurDate.getSeconds(), CurDate.getMilliseconds()) / 1000);
+	}
+
+	function GetTimeStamp() // UTC +0 (без смещения)
+	{
+		return Math.floor(new Date() / 1000);
+	}
+	
+	function StrToCharCodes(Str){
+		let NewStr = '';
+		let CharCode = 0;
+		for (let i = 0; i < Str.length; i++)
+			NewStr += 'x' + Str.charCodeAt(i);
+			
+		return NewStr;
+	}
+	
+	function CharCodesToStr(Str){
+		let NewStr = '';
+		if (Str.length == 0) return '';
+		if (Str[0] != 'x') return '';
+		Str = Str.substring(1, Str.length);
+		Str += 'x';
+		while (Str.indexOf('x') > 0) {
+			NewStr += String.fromCharCode(parseInt(Str.substring(0, Str.indexOf('x')), 0));
+			Str = Str.substring(Str.indexOf('x') + 1, Str.length);
+		}	
+		return NewStr;
+	}
+	
+	function FullReset()
+	{
+		if (!confirm(IDS_CONFIRM_FULL_RESET)) return;
+		localStorage.clear();
+		document.location.reload();
+	}
+	
+	function PlaceDate(TimeStampSec) // Дата в заметке
+	{
+		try {
+			let date = new Date();
+			date.setTime(TimeStampSec * 1000 + date.getTimezoneOffset() * 60000 ); // После присвоения времени добавляется смещение UTC, поэтому вычитаем его.
+
+			let CurDate = new Date(); // Текущее время для сравнения
+			let mTime = '' + date.getHours();
+			if (date.getMinutes() < 10) {mTime += ':0' + date.getMinutes();} else {mTime += ':' + date.getMinutes();}
+			
+			let MyDate = date.getDate() + ' ' + IDS_MONTHS[date.getMonth()]; //День, месяц
+			if (CurDate.getFullYear() != date.getFullYear()) MyDate += ' ' + date.getFullYear() + ','; //Год
+			MyDate += ' ' + mTime;
+			
+			return MyDate;
+		} catch (e) {
+			return '-';
+		}
+	}
+	
+	function ListDate(TimeStampSec) // Дата в списке
+	{
+		try {
+			let date = new Date();
+			date.setTime(TimeStampSec * 1000 + date.getTimezoneOffset() * 60000 ); // После присвоения времени добавляется смещение UTC, поэтому вычитаем его.
+
+			let CurDate = new Date(); // Текущее время для сравнения
+			let mTime = '' + date.getHours();
+			if (date.getMinutes() < 10) {mTime += ':0' + date.getMinutes();} else {mTime += ':' + date.getMinutes();}
+			
+			let MyDate = date.getDate() + ' ' + IDS_MONTHS[date.getMonth()];
+			if (CurDate.getFullYear() != date.getFullYear()) MyDate += ' ' + date.getFullYear();
+			
+			// Даты без времени для точного определения пройденных дней
+			let DCurDate = new Date(CurDate.getFullYear(), CurDate.getMonth(), CurDate.getDate(), 0, 0, 0, 0);
+			let DDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+			
+			let DaysAgo = Math.floor((DCurDate - DDate) / (1000 * 60 * 60 * 24));
+			
+			let GetCurDay = CurDate.getDay(); 
+			if (GetCurDay == 0) GetCurDay = 7;
+			
+			if (DaysAgo < GetCurDay) MyDate = IDS_DAYOFWEEK[date.getDay() - 1];
+
+			if (DaysAgo == 0) MyDate = mTime;
+			if (DaysAgo == 1) MyDate = IDS_YESTERDAY;
+
+			return MyDate;
+		} catch (e) {
+			return '-';
+		}
+	}
+	
+	function ExtractTitle(Str){
+		if (Str.indexOf('\n') > 0)
+			Str = Str.substring(0, Str.indexOf('\n'));
+		if (Str.endsWith(':'))
+			Str = Str.slice(0, -1);
+		if (Str.length > 50)
+			Str = Str.substring(0, 50) + '...';
+		return Str;
+	}
+	
+	function ChangeDateTimeStatus()
+	{
+		if (CurPlaceID == '-1')
+			return;
+		if (UpdateDateTime == false)
+		{
+			UpdateDateTime = true;
+			Notification(IDS_DATE_UPDATE);
+		} else {
+			UpdateDateTime = false;
+			Notification(IDS_DATE_NOT_UPDATE);
+		}
+	}
+	
+	function ShowPlaces(SearchValue = '', Cat = '') // trim(), toLowerCase()
+	{
+		if (TabletMode == false)
+			document.getElementById('place').style.display = 'none';
+		document.getElementById('list').style.display = 'block';
+		
+		let PlacesStr = '';
+		let PlacesCount = 0;
+		
+		LastSearchValue = SearchValue; // Сохраняем на случай удаления заметки, при поиске
+		
+		// Вывод
+		PlacesAr.forEach(function(Place) {
+			PlaceText = CharCodesToStr(Place.Place);
+			CatName = CharCodesToStr(Place.Category);
+			if (
+				(SearchValue == '' && Cat == '') || // Нет ни поиска, ни категории — показываем все
+				(SearchValue != '' && PlaceText.toLowerCase().indexOf(SearchValue.toLowerCase()) >= 0) || // Поиск совпал
+				(Cat != '' && Cat.toLowerCase() == CatName.toLowerCase()) // Категория совпала
+				)
+			{
+				PlacesCount += 1;
+				//console.log(Place);
+				PlacesStr += '<div onclick="GetPlace(' + Place.ID  + ')" id="item">' + 
+							'<div id="title">' + ExtractTitle(PlaceText) + '</div>' +
+							'<div id="date">' + ListDate(Place.DateTime) + '</div>' +
+							'</div>';
+			}
+		});
+		
+		document.getElementById('PlacesCount').innerHTML = IDS_PLACES + ' (' + PlacesCount + ')';
+		document.getElementById('items').innerHTML = PlacesStr; // Заменяем, чтобы не мерцала пустота
+		PlacesStr = '';
+	}
+	
+	function BackPlace() {
+		StopNavigation();
+		if (TabletMode == false)
+			document.getElementById('place').style.display = 'none';
+		document.getElementById('list').style.display = 'block';
+		
+		if (CategoriesShownList || SearchShown) // Оставляем заметки, если выбрана категория или поиск
+			return;
+		else
+			ShowPlaces();
+	}
+	
+	function ShowHideCategoriesList() {
+		if (SearchShown) SearchShowHide();
+	
+		if (CategoriesShownList) {
+			CategoriesShownList = false;
+			ShowPlaces();
+			return;
+		}
+		
+		if (TabletMode == false)
+			document.getElementById('place').style.display = 'none';
+		document.getElementById('list').style.display = 'block';
+
+		let CatsStr = '';
+		
+		for (let Category of Categories) {
+			CatsStr += '<div onclick="ShowPlaces(\'\', \'' + Category + '\')" id="item">' + 
+						'<div id="title">' + ExtractTitle(Category) + '</div>' +
+						//'<div id="date"></div>' +
+						'</div>';
+		}
+		document.getElementById('PlacesCount').innerHTML = IDS_CATEGORIES + ' (' + Categories.length + ')';
+		document.getElementById('items').innerHTML = CatsStr; // Заменяем, чтобы не мерцала пустота
+		CatsStr = '';
+		CategoriesShownList = true;	
+	}
+	
+	function NewPlace()
+	{
+		StopNavigation();
+		CurPlaceID = '-1';
+		if (TabletMode == false)
+			document.getElementById('list').style.display = 'none';
+		document.getElementById('settings').style.display = 'none';
+		document.getElementById('place').style.display = 'block';
+		
+		document.getElementById('PlaceTitle').value = IDS_NEW_PLACE;
+		
+		document.getElementById('PlaceDistance').innerHTML = '0 ' + IDS_DISTANCE_UNIT_SMALL;
+		UpdateDistance(0);	 
+		document.getElementById('Coords').value = '0.0, 0.0';
+		document.getElementById('RadiusValue').value = '0';
+		document.getElementById('Radius').value = '0';
+		GetCurrentRadius = 0;
+		document.getElementById('compass').style.transform = 'rotate(0deg)';
+		document.getElementById('Arrow').style.display = 'block';
+		UpdateCategoriesList(); // Сброс
+	}
+	
+	function ShowSettings()
+	{
+		if (TabletMode == false)
+			document.getElementById('list').style.display = 'none';
+		document.getElementById('place').style.display = 'none';
+		document.getElementById('settings').style.display = 'block';
+		document.getElementById('localstoragesize').innerHTML = IDS_LOCAL_STORAGE.replace('%s', Math.trunc((new Blob(Object.values(localStorage)).size / 1024)));
+	}
+	
+	function BackSettings() {
+		document.getElementById('settings').style.display = 'none';
+		if (TabletMode == false)
+			document.getElementById('list').style.display = 'block';
+		else
+			document.getElementById('place').style.display = 'block';
+	}
+	
+	function BackTheme(){
+		document.documentElement.setAttribute('data-theme', 'default');
+		document.getElementsByTagName('meta')['color-scheme']?.setAttribute('content', 'light');
+	}
+	
+	function DarkTheme(){
+		document.documentElement.setAttribute('data-theme', 'dark');
+		document.getElementsByTagName('meta')['color-scheme']?.setAttribute('content', 'dark');
+	}
+	
+	function IsDomain(Str){
+		Str = Str.toLowerCase();
+		if (Str.indexOf('http://') == 0 || Str.indexOf('https://') == 0)
+			return true;
+		else
+			return false;
+	}
+	
+	function UpdateCategoriesList(){
+		let CategorySelect = document.getElementById('PlaceCat');
+		CategorySelect.innerHTML = '';
+		Categories.forEach(function (cat) {
+			let option = document.createElement('option');
+			option.value = cat;
+			option.textContent = cat;
+			CategorySelect.appendChild(option);
+		});
+	}
+	
+	function SettingsDone()
+	{
+		// Настройки с изменяемым адресом
+		if (UseManualAddress) {
+			// Port
+			ServerPort = document.getElementById('ServerPort').value;
+			localStorage.setItem('ServerPort', ServerPort); // Храним для автопоиска
+		
+			// IP / Address
+			ServerAddress = document.getElementById('ServerAddress').value;
+			localStorage.setItem('ServerAddress', ServerAddress);
+			
+			if (IsDomain(ServerAddress))
+				SyncAddress = ServerAddress;
+			else
+				SyncAddress = 'http://' + ServerAddress;
+			
+			if (ServerPort != '80')
+				SyncAddress += ':' + ServerPort;
+			
+			// Auto search IP
+			AutoSearchIP = document.getElementById('AutoSearchIPCB').checked; // Глобальная переменная
+			localStorage.setItem('AutoSearchIP', AutoSearchIP);
+		} else
+			SyncAddress = ''; // Для статичной синхронизации адрес относительный - /api/...
+		
+		// Сохраняем адрес полной синхронизации
+		localStorage.setItem('SyncAddress', SyncAddress);
+		
+		// Auto sync
+		let AutoSyncCB = document.getElementById('AutoSyncCB').checked;
+		localStorage.setItem('AutoSync', AutoSyncCB);
+		
+		// Auto-start navigation
+		AutoStartNav = document.getElementById('AutoStartNavCB').checked;
+		localStorage.setItem('AutoStartNav', AutoStartNav);
+		
+		// Use compass
+		UseCompass = document.getElementById('UseCompassCB').checked;
+		localStorage.setItem('UseCompass', UseCompass);
+		
+		if (PrevUseCompass)
+			window.removeEventListener('deviceorientationabsolute', handleOrientation);
+		PrevUseCompass = false;
+		if (UseCompass && 'ondeviceorientationabsolute' in window) {
+			window.addEventListener('deviceorientationabsolute', handleOrientation);
+			PrevUseCompass = true;
+		}
+
+		// Dark Theme
+		DarkThemeStartHour = parseInt(document.getElementById('DarkThemeStartHour').value);
+		DarkThemeEndHour = parseInt(document.getElementById('DarkThemeEndHour').value);
+		localStorage.setItem('DarkThemeStartHour', DarkThemeStartHour);
+		localStorage.setItem('DarkThemeEndHour', DarkThemeEndHour);
+		
+		let DarkThemeCB = document.getElementById('DarkThemeCB').checked;
+	
+		// Theme time	
+		let ThemeTimeCB = document.getElementById('ThemeTimeCB').checked;
+		if (ThemeTimeCB) {
+			DarkThemeCB = false;
+			document.getElementById('DarkThemeCB').checked = false;
+			let date = new Date();
+			if (date.getHours() < DarkThemeEndHour || date.getHours() >= DarkThemeStartHour)
+				DarkThemeCB = true;
+		}
+		
+		// Dark Theme
+		if (DarkThemeCB)
+			DarkTheme();
+		else
+			BackTheme();
+		
+		// Save dark theme status
+		localStorage.setItem('DarkTheme', DarkThemeCB);
+		
+		// Theme time status
+		localStorage.setItem('ThemeTime', ThemeTimeCB);
+		
+		localStorage.setItem('Categories', document.getElementById('CategorySettingsInput').value);
+		Categories = document.getElementById('CategorySettingsInput').value.split('\n');
+		//console.log(Categories);
+		
+		// Категории при запуске
+		localStorage.setItem('CategoriesAtRun', document.getElementById('CategoriesAtRunCB').checked);
+		
+		UpdateCategoriesList();
+		
+		BackSettings();
+	}
+	
+	function GetPlace(PlaceID)
+	{	
+		StopNavigation();
+		if (PlaceID == -1)
+		{
+			NewPlace()
+			return;
+		}
+		UpdateDateTime = true;
+		
+		const CurPlace = PlacesAr.find(function(Place) {
+			return Place.ID === PlaceID;
+		});
+		
+		if (CurPlace) {
+			CurPlaceID = CurPlace.ID;
+			LatestPlace = CurPlace.Latitude + ', ' + CurPlace.Longitude;
+			LatestPlaceName = ExtractTitle(CharCodesToStr(CurPlace.Place));
+			LatestPlaceCat = CharCodesToStr(CurPlace.Category);
+			document.getElementById('Coords').value = LatestPlace;
+			
+			// Выделение категории если есть и добавление если нет
+			UpdateCategoriesList(); // Сброс
+			let select = document.getElementById('PlaceCat');
+			let exists = Array.from(select.options).some(opt => opt.value === LatestPlaceCat);
+			if (!exists) {
+				let option = document.createElement('option');
+				option.value = LatestPlaceCat;
+				option.textContent = LatestPlaceCat;
+				select.appendChild(option);
+			}
+			select.value = LatestPlaceCat;
+			
+			GetCurrentRadius = CurPlace.Radius;
+			document.getElementById('Radius').value = CurPlace.Radius;
+						
+			document.getElementById('PlaceTitle').value = LatestPlaceName;
+			document.getElementById('RadiusValue').innerHTML = CurPlace.Radius;
+			document.getElementById('DatePlace').innerHTML = PlaceDate(CurPlace.DateTime); 
+			
+			CurPlaceDateTime = CurPlace.DateTime;
+			if (TabletMode == false)
+				document.getElementById('list').style.display = 'none';
+			document.getElementById('settings').style.display = 'none';
+			document.getElementById('place').style.display = 'block';
+			document.getElementById('Arrow').style.display = 'block';
+		}
+		
+		
+		document.getElementById('PlaceDistance').innerHTML = '0 ' + IDS_DISTANCE_UNIT_SMALL;
+		UpdateDistance(0);	
+		document.getElementById('StatusNav').innerHTML = IDS_OFF;
+		document.getElementById('StartStopNav').innerHTML = IDS_START;
+		if (AutoStartNav)
+			StartNavigation();
+		//console.log('GetPlace ' + PlaceID);
+	}
+	
+	function PlaceDone()
+	{
+		if (SearchShown) SearchShowHide();
+		let CurTimeStamp = GetTimeStamp();
+		let UTCTimeStamp = GetUTCTimeStamp();
+		let LatestCurPlaceID = CurPlaceID; // Для мновенного переключения на новую заметку, без ожидания выполнения SQL
+		let PlacesChanded = false;
+		
+		let Coords = document.getElementById('Coords').value;
+		let Latitude = 0;
+		let Longitude = 0;
+
+		if (Coords.indexOf(',') > -1) {
+			Coords = Coords.split(',');
+			Latitude = Coords[0].trim();
+			Longitude = Coords[1].trim();
+		} else {
+			Latitude = 0;
+			Longitude = 0;
+		}
+		
+		// Новое место
+		if (CurPlaceID == '-1') {
+			// Не создаем место без координат
+			if (document.getElementById('Coords').value.trim() != '') {
+				PlacesAr.push({
+					ID: CurTimeStamp,
+					Latitude: Latitude,
+					Longitude: Longitude,
+					Category: StrToCharCodes(document.getElementById('PlaceCat').value),
+					Radius: document.getElementById('Radius').value,
+					Place: StrToCharCodes(document.getElementById('PlaceTitle').value),
+					DateTime: UTCTimeStamp
+				});
+				
+				ActionsAr.push({
+					Name: 'insert',
+					ID: CurTimeStamp,
+					Latitude: Latitude,
+					Longitude: Longitude,
+					Category: StrToCharCodes(document.getElementById('PlaceCat').value),
+					Radius: document.getElementById('Radius').value,
+					Place: StrToCharCodes(document.getElementById('PlaceTitle').value.trim()),
+					DateTime: UTCTimeStamp
+				});
+				PlacesChanded = true;
+			}
+			//console.log('Inserted done');
+		} else if (LatestPlace != document.getElementById('Coords').value.trim() ||
+				   LatestPlaceName != document.getElementById('PlaceTitle').value.trim() ||
+				   LatestPlaceCat != document.getElementById('PlaceCat').value.trim()
+		) { // Добавлять только при наличии изменений
+			
+			const CurPlace = PlacesAr.find(function(Place) {
+				return Place.ID === LatestCurPlaceID;
+			});
+			
+			CurPlace.Place = StrToCharCodes(document.getElementById('PlaceTitle').value.trim());
+			CurPlace.Category = StrToCharCodes(document.getElementById('PlaceCat').value.trim());
+			CurPlace.Latitude = Latitude;
+			CurPlace.Longitude = Longitude;
+			CurPlace.Radius = parseFloat(document.getElementById('Radius').value);
+			
+			if (UpdateDateTime)
+				CurPlace.DateTime = UTCTimeStamp;
+			
+			ActionsAr.push({
+				Name: 'update',
+				ID: LatestCurPlaceID,
+				Latitude: Latitude,
+				Longitude: Longitude,
+				Category: StrToCharCodes(document.getElementById('PlaceCat').value),
+				Radius: document.getElementById('Radius').value,
+				Place: StrToCharCodes(document.getElementById('PlaceTitle').value.trim()),
+				DateTime: CurPlace.DateTime
+			});
+
+			PlacesChanded = true;
+			//console.log('Updated done');
+		}
+		
+		
+		if (PlacesChanded) { // Если место добавлено / обновлена
+			// Сортировка по времени
+			PlacesAr.sort(function(a, b) { return b.DateTime - a.DateTime; }); 
+			
+			localStorage.setItem('Places', JSON.stringify(PlacesAr));
+			localStorage.setItem('Actions', JSON.stringify(ActionsAr));
+		}
+		
+		if (TabletMode) // Новое место открывается только в режиме планшета
+			NewPlace();
+		ShowPlaces();
+	}
+	
+	function RemPlace()
+	{
+		if (CurPlaceID == '-1') {ShowPlaces(); return;}
+		
+		let IndexToRemove = PlacesAr.findIndex(Place => Place.ID === CurPlaceID);
+		if (IndexToRemove !== -1)
+			PlacesAr.splice(IndexToRemove, 1);
+		
+		ActionsAr.push({
+			Name: 'delete',
+			ID: CurPlaceID,
+			Latitude: 0,
+			Longitude: 0,
+			Category: '',
+			Radius: 0,
+			Place: '',
+			DateTime: 0
+		});
+		
+		localStorage.setItem('Places', JSON.stringify(PlacesAr));
+		localStorage.setItem('Actions', JSON.stringify(ActionsAr));
+		
+		if (CategoriesShownList || SearchShown) // Оставлять выбранную категорию или поиск
+			ShowPlaces(LastSearchValue, '');
+		else
+			ShowPlaces();
+		
+		if (TabletMode) // Новое место открывается только в режиме планшета
+			NewPlace();
+		//console.log('Deleted ' + CurPlaceID);
+	}
+	
+	function Notification(Str){
+		if (HideFirstNotifyError) // На замену navigator.onLine (постоянно стала возвращать true на Android)
+		{
+			HideFirstNotifyError = false;
+			if (Str == IDS_CONNECTION_FAILED)
+				return;
+		}
+		document.getElementById('sync-progress').style.display = 'none';
+		let notifyBlock = document.getElementById('notification');
+		notifyBlock.innerHTML = Str;
+		notifyBlock.className = 'show';
+
+		setTimeout(function(){
+			notifyBlock.className = notifyBlock.className.replace('show', ''); 
+		}, 3000);
+	}
+		
+	function SearchShowHide() {
+		if (SearchShown) { // Скрытие
+			SearchShown = false;
+			CategoriesShownList = false;
+			document.getElementById('search-block').style.display = 'none';
+			document.getElementById('Search').value = '';
+			ShowPlaces();
+		} else { // Показ
+			SearchShown = true;
+			document.getElementById('search-block').style.display = 'block';
+		}
+	}
+	
+	let rotationSyncBtnAngle = 0;
+	function rotateSyncBtn(btnElement) {
+		rotationSyncBtnAngle += 360;
+		btnElement.style.transform = 'rotate(' + rotationSyncBtnAngle + 'deg)';
+	}
+	
+	function GetDataNew(URL){
+		return new Promise(function(resolve, reject) {
+			let request = new XMLHttpRequest();
+			
+			request.open('GET', URL, true);
+			
+			request.onload = function() {
+				if	(request.status == 200)
+					resolve(request.responseText);
+				else
+					reject();
+			}
+			
+			request.onerror = function() {
+				reject();
+			};
+			
+			request.send();
+		});
+	}
+	
+	function GetData(URL){
+		return new Promise(function(resolve, reject) {
+			let request = new XMLHttpRequest();
+			
+			request.open('GET', URL, true);
+			
+			request.onload = function() {
+				if	(request.status == 200)
+					resolve(request.responseText);
+				else
+					reject();
+			}
+			
+			request.onerror = function() {
+				reject();
+			};
+			
+			request.send();
+		});
+	}
+	
+	function SendData(URL, Data){
+		 return new Promise(function(resolve, reject) {
+		 
+			let request = new XMLHttpRequest();
+			request.open('POST', URL);
+			request.setRequestHeader('Content-type', 'text/plain'); // Delphi XE
+			//request.setRequestHeader('Content-type', 'application/x-www-form-urlencoded'); // Delphi 7
+			
+			request.onload = function() {
+				if	(request.status == 200)
+					resolve(request.response);
+				else
+					reject();
+			}
+			
+			request.onerror = function() {
+				reject();
+			};
+			
+			request.send(Data);
+		});
+	}
+	
+	function GetDeviceID(){
+		let DeviceOS = 'Unknown'
+		if (/Android/i.test(window.navigator.userAgent))
+			DeviceOS = 'Android';
+		else if (/iPhone|iPod|iPad/i.test(window.navigator.userAgent))
+			DeviceOS = 'iOS';
+		else if (/Edg/.test(navigator.userAgent))
+			DeviceOS = 'Windows';
+			
+		return DeviceOS + '_' + Math.random().toString(36).substr(2, 9);
+	}
+	
+	function Sync(){
+		if (SyncWait) // Ждем выполнения
+			return;
+		
+		SyncWait = true;
+	
+		if (HideFirstNotifyError == false) // Android, из-за неработающего navigator.onLine
+			document.getElementById('sync-progress').style.display = 'block';
+		
+		function SyncPlaces(){
+								
+			// Первый запуск
+			if (FirstRun) {
+				//console.log('FirstRun');
+				GetData(SyncAddress + '/api/auth?id=' + DeviceID).then(function(responseText) {
+					if (responseText == 'auth:ok') {
+						//console.log('auth:ok');
+
+						// Получение всех заметок при первом запуске
+						let XMLDoc = document.createElement('div');
+						
+						GetData(SyncAddress + '/api/places?id=' + DeviceID).then(function(responsePlaces) {
+							XMLDoc.innerHTML = responsePlaces;
+							
+							let PlaceItems = XMLDoc.getElementsByTagName('place');
+							for (let i = 0; i < PlaceItems.length; i++)
+								PlacesAr.push({
+									ID: parseInt(PlaceItems[i].getAttribute('id')),
+									Latitude: PlaceItems[i].getAttribute('lat'),
+									Longitude: PlaceItems[i].getAttribute('lng'),
+									Category: PlaceItems[i].getAttribute('cat'),
+									Radius: parseFloat(PlaceItems[i].getAttribute('radius')),
+									Place: PlaceItems[i].innerHTML,
+									DateTime: parseInt(PlaceItems[i].getAttribute('datetime'))
+								});
+					
+							localStorage.setItem('Places', JSON.stringify(PlacesAr));
+					
+							delete XMLDoc;
+							
+							ShowPlaces();
+							
+							Notification(IDS_SYNC_SUCCESSFUL);
+							
+							// Сохраняем статус успешного первого запуска
+							FirstRun = false;
+							localStorage.setItem('FirstRun', FirstRun);
+							
+							SyncWait = false; // Разрешаем повторную синхронизацию;
+							
+						}).catch(function() {
+							SyncWait = false; // Разрешаем повторную синхронизацию;
+							
+							Notification(IDS_CONNECTION_FAILED);
+						});
+
+					} else {
+						SyncWait = false; // Разрешаем повторную синхронизацию;
+						
+						Notification(IDS_AUTH_REJECT);
+					}
+						
+					//console.log(responseText);
+				}).catch(function() {
+					SyncWait = false; // Разрешаем повторную синхронизацию;
+					
+					Notification(IDS_CONNECTION_FAILED);
+				});
+					
+			} else { // Второй и последующие запуски
+				// Получение действий
+				let XMLDoc = document.createElement('div');
+				GetData(SyncAddress + '/api/actions?id=' + DeviceID).then(function(responsePlaces) {
+					XMLDoc.innerHTML = responsePlaces;
+
+					// Удаляем действия
+					GetData(SyncAddress + '/api/received?id=' + DeviceID).then(function(responseStatus) {
+					
+						if (responseStatus == 'ok') {
+							let ActionsItems = XMLDoc.getElementsByTagName('*');
+
+							for (let i = 0; i < ActionsItems.length; i++) { 
+
+								let ReceivedPlaceID = parseInt(ActionsItems[i].getAttribute('id'));
+								let ReceivedPlaceLatitude = ActionsItems[i].getAttribute('lat');
+								let ReceivedPlaceLongitude = ActionsItems[i].getAttribute('lng');
+								let ReceivedPlaceCategory = ActionsItems[i].getAttribute('cat');
+								let ReceivedPlaceRadius = parseInt(ActionsItems[i].getAttribute('radius'));
+								let ReceivedPlaceDateTime = parseInt(ActionsItems[i].getAttribute('datetime'));
+
+								let ReceivedPlace = ActionsItems[i].innerHTML;
+								
+								//console.log(ReceivedPlaceID, ReceivedPlaceCoords, ReceivedPlaceRadius, ReceivedPlace);
+								
+								if (ActionsItems[i].tagName == 'INSERT')
+									PlacesAr.push({
+										ID: ReceivedPlaceID,
+										Latitude: ReceivedPlaceLatitude,
+										Longitude: ReceivedPlaceLongitude,
+										Category: ReceivedPlaceCategory,
+										Radius: ReceivedPlaceRadius,
+										Place: ReceivedPlace,
+										DateTime: ReceivedPlaceDateTime
+									});
+									
+								if (ActionsItems[i].tagName == 'UPDATE') {
+									const UpdatePlace = PlacesAr.find(function(Place) {
+										return Place.ID === ReceivedPlaceID;
+									});
+									UpdatePlace.Latitude = ReceivedPlaceLatitude;
+									UpdatePlace.Longitude = ReceivedPlaceLongitude;
+									UpdatePlace.Category = ReceivedPlaceCategory;
+									UpdatePlace.Radius = ReceivedPlaceRadius;
+									UpdatePlace.Place = ReceivedPlace;
+									UpdatePlace.DateTime = ReceivedPlaceDateTime;
+								}
+									
+								if (ActionsItems[i].tagName == 'DELETE') {
+									let IndexToRemove = PlacesAr.findIndex(Place => Place.ID === ReceivedPlaceID);
+									if (IndexToRemove !== -1)
+										PlacesAr.splice(IndexToRemove, 1);
+								}
+							}
+							
+							// Сортировка по времени
+							PlacesAr.sort(function(a, b) { return b.DateTime - a.DateTime; }); 
+							
+							localStorage.setItem('Places', JSON.stringify(PlacesAr));
+							
+							if (CategoriesAtRun && CategoriesAtRunOnce) {
+								ShowHideCategoriesList();
+								CategoriesAtRunOnce = false;
+							} else
+								ShowPlaces();
+							
+							if (TabletMode) // Новое место открывается только в режиме планшета, нужно для того, чтобы старое место не оставалась в интерфейсе, если сервер её удалил
+								NewPlace();
+						
+							Notification(IDS_SYNC_SUCCESSFUL);
+						} else if (responseStatus == 'auth:denied') {
+							FirstRun = true; // Запрос повторной авторизации, статус ↓
+							//console.log(responseStatus);
+							
+						} else
+							Notification(IDS_CONNECTION_FAILED);
+					
+						SyncWait = false; // Разрешаем повторную синхронизацию
+					
+					}).catch(function() {
+						SyncWait = false; // Разрешаем повторную синхронизацию;
+						
+						Notification(IDS_CONNECTION_FAILED);
+					});
+			
+					delete XMLDoc;
+					
+				}).catch(function() {
+					SyncWait = false; // Разрешаем повторную синхронизацию;
+					
+					Notification(IDS_CONNECTION_FAILED);
+				});
+				
+			}
+		}	
+			
+		// Генерация XML действий пользователя и отправка на "сервер"
+		if (FirstRun == false) // При первом запуске отправлять нечего
+			GetData(SyncAddress + '/api/auth?id=' + DeviceID).then(function(responseText) { // Проверка авторизации
+				if (responseText == 'auth:ok') {
+
+					let XMLAPI = '<actions>\n';
+
+					ActionsAr.forEach(function(Action) {
+						if (Action.Name == 'insert')
+							XMLAPI += '\t<insert id="' + Action.ID + '" lat="' + Action.Latitude + '" lng="' + Action.Longitude + '" cat="' + Action.Category + '" radius="' + Action.Radius + '" datetime="' + Action.DateTime + '">' + Action.Place + '</insert>\n';
+						if (Action.Name == 'update')
+							XMLAPI += '\t<update id="' + Action.ID + '" lat="' + Action.Latitude + '" lng="' + Action.Longitude + '" cat="' + Action.Category + '" radius="' + Action.Radius + '" datetime="' + Action.DateTime + '">' + Action.Place + '</update>\n';
+						if (Action.Name == 'delete')
+							XMLAPI += '\t<delete id="' + Action.ID + '"></delete>\n';
+					});
+					
+					XMLAPI += '</actions>';
+					
+					//alert(XMLAPI);
+
+					// Отправка XML на "сервер"
+					SendData(SyncAddress + '/api/syncplaces?id=' + DeviceID, XMLAPI).then(function(responseStatus) {
+
+						if (responseStatus == 'ok') {
+							ActionsAr = [];
+							localStorage.setItem('Actions', '');
+							
+							SyncPlaces();
+						} else {
+							SyncWait = false; // Разрешаем повторную синхронизацию;
+							
+							Notification(IDS_CONNECTION_FAILED);
+						}
+					}).catch(function() {
+						SyncWait = false; // Разрешаем повторную синхронизацию;
+					
+						Notification(IDS_CONNECTION_FAILED);
+					});
+							
+					// Завершение генерации и отправки XML API.
+				} else {
+					SyncWait = false; // Разрешаем повторную синхронизацию;
+						
+					Notification(IDS_AUTH_REJECT);
+				}
+			}).catch(function() {
+				SyncWait = false; // Разрешаем повторную синхронизацию;
+						
+				if (CategoriesAtRun && CategoriesAtRunOnce) {
+					ShowHideCategoriesList();
+					CategoriesAtRunOnce = false;
+				}
+						
+				Notification(IDS_CONNECTION_FAILED);
+			});
+		
+		
+		if (FirstRun)
+			SyncPlaces();
+	}
+	
+	function SyncWithFoundAddress(){
+		// Проверка доступности IP адреса
+		let FoundIPAddress = false;
+		function CheckIPStatus(IP){
+			if (FoundIPAddress) return;
+			//console.log('Check ' + IP);
+			GetData('http://' + IP + ':' + ServerPort + '/api/connecttest').then(function(responseText) { // Проверка IP адреса
+				if (responseText == 'ok') {
+					SyncAddress = 'http://' + IP + ':' + ServerPort;
+					FoundIPAddress = true;
+					Sync();
+				}
+			}).catch(function() {
+			});
+		}
+		
+		// Список наиболее популярных локальных IP адресов
+		let IPs = ['192.168.0.', '192.168.0.', '192.168.1.', '192.168.1.', '192.168.2.', '192.168.3.'];
+		let LastAddrs = [     0,            100,          0,            100,          0,            0]; // Начальный адрес
+		
+		for (let i = 0; i < IPs.length; i++)
+			for (let j = 0; j <= 15; j++)
+				CheckIPStatus(IPs[i] + (LastAddrs[i] + j));
+	}
+	
+	function SyncAdvance(){
+		if (AutoSearchIP)
+			SyncWithFoundAddress();
+		else
+			Sync();
+	}
+		
+	if (DevicePlatform != PlatformIOS) { // На Android и Windows всё хорошо
+		function CheckTabletMode(){
+			if (window.innerWidth >= 550) {
+				TabletMode = true;
+				document.getElementById('list').style.display = 'block';
+				
+				if (document.getElementById('place').style.display == 'none' && (document.getElementById('settings').style.display == 'none' || document.getElementById('settings').style.display == '')) //Когда блока нет, вместо "none" бывает ""
+					document.getElementById('place').style.display = 'block';
+				document.getElementsByClassName('sub-panel')[0].style.cssText = 'border-right: 1px solid var(--list-right-border-color);';
+			} else {
+				TabletMode = false;
+				if (document.getElementById('place').style.display == 'block' || document.getElementById('settings').style.display == 'block')
+					document.getElementById('list').style.display = 'none';
+				document.getElementsByClassName('sub-panel')[0].style.cssText = '';
+			}
+		}
+		
+		// На iOS нет необходимости из-за проблем
+		window.onresize = function(){
+			CheckTabletMode();
+		}
+	
+	} else {
+		function CheckTabletMode() // Специфика iOS, window.innerWidth не работает, заменяется с height при смене ориентации.
+		{
+			// Если в useragent есть iPad с любым регистром
+			if (/iPad/i.test(window.navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+			{
+				TabletMode = true;
+				document.getElementsByTagName('style')[0].innerHTML +=
+				'#list{display:block; float:left; width:37%;}' +
+				'#list #items{border-right:1px solid var(--list-right-border-color);}' +
+				'.sub-panel{border-right: 1px solid var(--list-right-border-color);}' +
+				'#place{display:block; float:right; width:63%;}' +
+				'#settings{float:right; width:63%;}' +
+				'.hide-btn img{opacity:0;}';
+			} else {
+				TabletMode = false;
+			}
+		}
+		
+		// iOS блокировка скрола
+		function iOSBlockOffsetAppScrolling() {
+			let preventScroll = function(event, element) {
+				let up = (event.touches[0].clientY > element.slideBeginY);
+				let down = (event.touches[0].clientY < element.slideBeginY);
+				element.slideBeginY = event.touches[0].clientY;
+
+				if ((up && element.allowUp) || (down && element.allowDown))
+					event.stopPropagation();
+				else
+					event.preventDefault();
+			};
+
+			let enableScrollLock = function(elementId) {
+				let element = document.getElementById(elementId);
+
+				element.addEventListener('touchstart', function(event) {
+					element.allowUp = (element.scrollTop > 0);
+					element.allowDown = (element.scrollTop < element.scrollHeight - element.clientHeight);
+					element.slideBeginY = event.touches[0].clientY;
+				});
+
+				element.addEventListener('touchmove', function(event) {
+					preventScroll(event, element);
+				});
+			};
+
+			enableScrollLock('items');
+			enableScrollLock('page');
+			// Настройки не блочим, проблемы при скролинге
+		}
+	}
+	
+	// Инициализация
+	document.addEventListener('DOMContentLoaded', function(){
+		// Перевод
+		document.getElementById('PlacesCount').innerHTML = IDS_PLACES + ' (0)';
+		document.getElementById('PlaceTitle').value = IDS_NEW_PLACE;
+		document.getElementById('Search').placeholder = IDS_SEARCH;
+		
+		document.getElementById('StatusNav').innerText = IDS_OFF;
+		document.getElementById('DistanceTitle').innerHTML = IDS_DISTANCE;
+		document.getElementById('PlaceDistance').innerHTML = '0 ' + IDS_DISTANCE_UNIT_SMALL;
+		document.getElementById('DistanceTimeTitle').innerHTML = IDS_TIME_LEFT;
+		UpdateDistance(0);
+				
+		document.getElementById('PlaceCoordsTitle').innerHTML = IDS_COORDINATES;
+		document.getElementById('PlaceCatTitle').innerHTML = IDS_CATEGORIES + ':';
+		document.getElementById('RadiusTitle').innerHTML = IDS_RADIUS;
+		document.getElementById('DistanceUnitSmall').innerHTML = IDS_DISTANCE_UNIT_SMALL;
+		document.getElementById('GetCurrentCoords').innerHTML = IDS_GET_COORDS;
+		document.getElementById('StartStopNav').innerHTML = IDS_START;
+		document.getElementById('compass').style.backgroundImage = 'url(' + IDS_COMPASS_IMG + ')';
+		
+		document.getElementById('SettingsTitle').innerText = IDS_SETTINGS;
+		
+		if (UseManualAddress) {
+			document.getElementById('SyncAddressTitle').innerText = IDS_SYNC_ADDRESS;
+			document.getElementById('SyncPortTitle').innerText = IDS_SYNC_PORT;
+			document.getElementById('AutoSearchIPTitle').innerText = IDS_AUTOSEARCH_IP;
+			document.getElementById('AboutSync').innerText = IDS_ABOUT_SYNC;
+		}
+		
+		document.getElementById('AutoSyncTitle').innerText = IDS_AUTO_SYNC;
+		document.getElementById('AboutAutoSync').innerText = IDS_ABOUT_AUTO_SYNC;
+		document.getElementById('AutoStartNavTitle').innerText = IDS_AUTOSTART_NAV;
+		document.getElementById('UseCompassTitle').innerText = IDS_USE_COMPASS;
+		document.getElementById('AboutUseCompass').innerText = IDS_ABOUT_USE_COMPASS;
+		document.getElementById('DarkThemeTitle').innerText = IDS_DARK_THEME;
+		document.getElementById('ThemeTimeTitle').innerText = IDS_THEME_TIME_DEPENDENT;
+		document.getElementById('DarkThemeStartTitle').innerText = IDS_DARK_THEME_START;
+		document.getElementById('DarkThemeEndTitle').innerText = IDS_DARK_THEME_END;
+		document.getElementById('AboutThemeTime').innerText = IDS_ABOUT_THEME_TIME;
+		document.getElementById('CategoriesTitle').innerText = IDS_CATEGORIES;
+		document.getElementById('CategoriesAtRunTitle').innerText = IDS_CATEGORIES_AT_RUN;
+		document.getElementById('LastUpdate').innerText = IDS_LAST_UPDATE;
+		document.getElementById('ResetBtn').innerText = IDS_FULL_RESET;
+		
+		//document.getElementById('DaysAgo').innerHTML = PlaceDateAgo(GetUTCTimeStamp());
+		document.getElementById('DatePlace').innerHTML = PlaceDate(GetUTCTimeStamp());
+		
+		// Заметки и события
+		if (localStorage.getItem('Places') != '' && localStorage.getItem('Places') != null)
+			PlacesAr = JSON.parse(localStorage.getItem('Places'));
+		if (localStorage.getItem('Actions') != '' && localStorage.getItem('Actions') != null)
+			ActionsAr = JSON.parse(localStorage.getItem('Actions'));
+		
+		// Настройки, Dark theme
+		if (localStorage.getItem('DarkThemeStartHour') != null) {
+			DarkThemeStartHour = parseInt(localStorage.getItem('DarkThemeStartHour'));
+			DarkThemeEndHour = parseInt(localStorage.getItem('DarkThemeEndHour'));
+			document.getElementById('DarkThemeStartHour').value=DarkThemeStartHour;
+			document.getElementById('DarkThemeEndHour').value=DarkThemeEndHour;
+		}
+		
+		document.getElementsByTagName('meta')['color-scheme']?.setAttribute('content', 'light'); // Сброс, по умолчанию почему-то сохраняется прошлый
+		if (localStorage.getItem('DarkTheme') != null && localStorage.getItem('DarkTheme') == 'true') {
+			document.getElementById('DarkThemeCB').checked = true;
+			DarkTheme();
+		} else if (localStorage.getItem('ThemeTime') != null && localStorage.getItem('ThemeTime') == 'true') {
+			document.getElementById('ThemeTimeCB').checked = true;
+			
+			let date = new Date();
+			if (date.getHours() < DarkThemeEndHour || date.getHours() >= DarkThemeStartHour) 
+				DarkTheme();
+		}
+		
+		// Категории
+		if (localStorage.getItem('Categories') != null)
+			document.getElementById('CategorySettingsInput').value = localStorage.getItem('Categories');
+		else
+			document.getElementById('CategorySettingsInput').value = IDS_CATEGORIES_LIST;
+		Categories = document.getElementById('CategorySettingsInput').value.split('\n');
+		//console.log(Categories);
+
+		UpdateCategoriesList();
+		
+		CheckTabletMode();
+
+		ShowPlaces();
+		
+		// Категории при запуске
+		if (localStorage.getItem('CategoriesAtRun') != null && localStorage.getItem('CategoriesAtRun') == 'true') {
+			document.getElementById('CategoriesAtRunCB').checked = true;
+			CategoriesAtRun = true;
+			CategoriesAtRunOnce = true;
+			ShowHideCategoriesList(); // Чтобы не мерцали заметки, до выполнения или ошибки синхронизации
+			CategoriesShownList = false; // Обходной путь
+		}
+		
+		// Настройки, IP
+		// Полный адрес синхронизации
+		if (localStorage.getItem('SyncAddress') != null)
+			SyncAddress = localStorage.getItem('SyncAddress');
+		else
+			ShowSettings();
+			
+		if (localStorage.getItem('ServerAddress') != null) {
+			ServerAddress = localStorage.getItem('ServerAddress');
+			document.getElementById('ServerAddress').value = ServerAddress;
+		}
+		
+		// Порт
+		if (localStorage.getItem('ServerPort') != null) {
+			ServerPort = localStorage.getItem('ServerPort');
+			document.getElementById('ServerPort').value = ServerPort;
+		}
+		
+		// Автопоиск IP адреса
+		if (localStorage.getItem('AutoSearchIP') != null && localStorage.getItem('AutoSearchIP') == 'true') {
+			document.getElementById('AutoSearchIPCB').checked = true;
+			AutoSearchIP = true;
+		}
+		
+		// Первый запуск
+		FirstRun = localStorage.getItem('FirstRun') == null;
+		
+		// Настройки, Device ID
+		if (localStorage.getItem('DeviceID') === null) {
+			DeviceID = GetDeviceID();
+			localStorage.setItem('DeviceID', DeviceID);
+		} else
+			DeviceID = localStorage.getItem('DeviceID');
+		document.getElementById('DeviceID').innerHTML = 'ID: ' + DeviceID;
+		
+		// Настройки, автоматическая синхронизация при запуске
+		if (localStorage.getItem('AutoSync') != null && localStorage.getItem('AutoSync') == 'true') {
+			document.getElementById('AutoSyncCB').checked = true;
+			
+			SyncAdvance();
+		} else
+			HideFirstNotifyError = false; // На Android не работает navigator.onLine, поэтому так
+			
+		if (localStorage.getItem('AutoStartNav') != null) {
+			AutoStartNav = localStorage.getItem('AutoStartNav') == 'true';
+			document.getElementById('AutoStartNavCB').checked = AutoStartNav;
+		}
+
+		if (localStorage.getItem('UseCompass') != null)
+			UseCompass = localStorage.getItem('UseCompass') == 'true';
+		else
+			UseCompass = 'ondeviceorientation' in window;
+		document.getElementById('UseCompassCB').checked = UseCompass;
+		if (UseCompass && 'ondeviceorientation' in window) {
+			window.addEventListener('deviceorientation', handleOrientation, true);
+			PrevUseCompass = true;
+		}
+		
+		// После чтение состояния компаса
+		if (localStorage.getItem('DistanceTimeMode') != null) {
+			DistanceTimeMode = parseInt(localStorage.getItem('DistanceTimeMode'));
+			if (UseCompass && DistanceTimeMode == 4) { // Если компас был включен, а режим остался недопустный, то меняем на доступный
+				DistanceTimeMode = 3;
+				localStorage.setItem('DistanceTimeMode', DistanceTimeMode);
+			}
+		}
+		SwapDistanceTimeMode(false);
+		
+		// Блокируем скролинг вне приложения для iOS
+		if (DevicePlatform == PlatformIOS)
+			iOSBlockOffsetAppScrolling();
+
+		// Скрываем лишние пункты меню для статичного адреса
+		if (UseManualAddress == false) {
+			document.querySelectorAll('.HideForStatAddr').forEach(function(element) {
+				element.style.display = 'none';
+			});
+			let AutoSearchIPBlock = document.getElementById('AutoSearchIP').parentElement;
+
+			AutoSearchIPBlock.style.border = '1px solid var(--settings-item-border-color)';
+			AutoSearchIPBlock.style.borderTopLeftRadius = '15px';
+			AutoSearchIPBlock.style.borderTopRightRadius = '15px';
+		}
+		
+		// PWA
+		if (IsPWA && 'serviceWorker' in navigator)
+			navigator.serviceWorker.register('pwa.js');
+		
+	});
+</script>
+</head>
+<body>
+<div id="container">
+	<div id="list">
+		<div id="panel">
+			<div id="btn" onclick="SyncAdvance();rotateSyncBtn(this);"><img src="images/sync.png" /></div>
+			<div class="title" id="PlacesCount">Места (0)</div>
+			<div id="btn" onclick="if (SearchShown) SearchShowHide(); if (CategoriesShownList) ShowHideCategoriesList(); NewPlace();"><img src="images/new.png" /></div>
+		</div>
+		<div id="panel-bg"></div>
+		
+		<div id="items">
+			<!--<div id="item">
+				<div id="title">Заголовок</div>
+				<div id="date">28 сен. 2018</div>
+			</div>-->
+		</div>
+		<div class="sub-panel">
+			<div id="btn" onclick="ShowSettings()"><img src="images/settings.png" /></div>
+			<div id="btn" onclick="ShowHideCategoriesList()"><img src="images/folders.png" /></div>
+			<div id="search-block"><input id="Search" type="text" onkeyup="ShowPlaces(this.value.trim().toLowerCase(), '')" placeholder="Поиск..."></div>
+			<div id="btn" onclick="SearchShowHide()"><img src="images/search.png" /></div>
+		</div>
+	</div>
+	
+	<div id="place">
+		<div id="panel">
+			<div id="btn" class="hide-btn" onclick="BackPlace()"><img src="images/back.png" /></div>
+			<input type="text" class="titleEdit" id="PlaceTitle" value="Место" />
+			<div id="btn" onclick="PlaceDone()"><img src="images/done.png" /></div>
+		</div>
+		<div id="panel-bg"></div>
+		<div id="page">
+			<div id="meta" onselectstart="return false">
+				<div id="StatusNav">Выключено</div>
+				<div id="DatePlace" onclick="ChangeDateTimeStatus()">-</div>
+			</div>
+			<div id="compass">
+				<img id="Arrow" src="arrow.png">
+			</div>
+			
+			<div id="items">
+				<div class="item">
+					<div class="title" id="DistanceTitle">Расстояние:</div>
+					<div id="control"><span id="PlaceDistance"></span></div>
+				</div>
+				<div class="item">
+					<div class="title" id="DistanceTimeTitle">Осталось времени:</div>
+					<div id="control">
+						<span id="PlaceDistanceTime" onclick="SwapDistanceTimeMode(true)">
+							🚶 00:00
+						</span>
+					</div>
+				</div>
+				<div class="item">
+					<div class="title" id="PlaceCoordsTitle">Координаты:</div>
+					<div id="control"><input id="Coords" type="text" placeholder="0.0,0.0" /></div>
+				</div>
+				<div class="item">
+					<div class="title" id="PlaceCatTitle">Категория:</div>
+					<div id="control"><select id="PlaceCat"></select></div>
+				</div>
+				<div class="item">
+					<div class="title"><span id="RadiusTitle">Радиус</span> <span id="RadiusValue">0</span> <span id="DistanceUnitSmall">м.</span></div>
+					<div id="control"><input id="Radius" type="range" value="0" min="0" max="25" oninput="document.getElementById('RadiusValue').innerText=this.value; GetCurrentRadius=this.value;" /></div>
+				</div>
+				<div class="item" style="display: flex; gap: 10px;">
+					<div id="GetCurrentCoords" onclick="GetCurrentCoords()" class="button">Получить кординаты</div>
+					<div id="StartStopNav" onclick="StartStopNavigation()" class="button">Старт</div>
+				</div>
+			</div>
+		</div>
+		<div class="sub-panel">
+			<div id="btn" onclick="RemPlace()"><img src="images/rm.png" /></div>
+		</div>
+	</div>
+	
+	<div id="settings">
+		<div id="panel">
+			<div id="btn" onclick="BackSettings()"><img src="images/back.png" /></div>
+			<div class="title" id="SettingsTitle">Настройки</div>
+			<div id="btn" onclick="SettingsDone()"><img src="images/done.png" /></div>
+		</div>
+		<div id="panel-bg"></div>
+		<div id="page">
+			<div id="items" class="HideForStatAddr">
+				<div id="item" >
+					<div class="title" id="SyncAddressTitle">IP или домен</div>
+					<div id="control"><input type="text" id="ServerAddress" oninput="if (IsDomain(this.value)) document.getElementById('ServerPort').value='80';" value="192.168.0.1" placeholder="192.168.0.1"></div>
+				</div>
+				<div id="item">
+					<div class="title" id="SyncPortTitle">Порт</div>
+					<div id="control"><input type="number" id="ServerPort" value="736"></div>
+				</div>
+				<div id="item">
+					<div class="title" id="AutoSearchIPTitle" style="width:70%;">Автопоиск IP адреса</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="AutoSearchIPCB" class="checkbox" /><label for="AutoSearchIPCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+			
+			<div id="AboutSync" class="titlebox"></div>
+			
+			<div id="items">
+				<div id="item">
+					<div class="title" id="AutoSyncTitle" style="width:70%;">Синхронизация при запуске</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="AutoSyncCB" class="checkbox" /><label for="AutoSyncCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+						
+			<div id="AboutAutoSync" class="titlebox"></div>
+			
+			<div id="items">
+				<div id="item">
+					<div class="title" id="AutoStartNavTitle" style="width:70%;">Автозапуск навигации</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="AutoStartNavCB" class="checkbox" checked /><label for="AutoStartNavCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+			
+			<div id="items" class="HideForIOS">
+				<div id="item">
+					<div class="title" id="UseCompassTitle" style="width:70%;">Использование компаса</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="UseCompassCB" class="checkbox" checked /><label for="UseCompassCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+			
+			<div id="AboutUseCompass" class="titlebox HideForIOS"></div>
+			
+			<div id="items">
+				<div id="item">
+					<div class="title" id="DarkThemeTitle" style="width:70%;">Тёмная тема</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="DarkThemeCB" class="checkbox" /><label for="DarkThemeCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+			
+			<div id="items">
+				<div id="item">
+					<div class="title" id="ThemeTimeTitle" style="width:70%;">Тема в зависимости от времени</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="ThemeTimeCB" class="checkbox" /><label for="ThemeTimeCB" class="switch"></label>
+					</div>
+				</div>
+				
+				<div id="item" >
+					<div class="title" id="DarkThemeStartTitle">Начало тёмной темы</div>
+					<div id="control"><input type="number" id="DarkThemeStartHour" value="19" min="0" max="23"></div>
+				</div>
+				<div id="item">
+					<div class="title" id="DarkThemeEndTitle">Конец тёмной темы</div>
+					<div id="control"><input type="number" id="DarkThemeEndHour" value="7" min="0" max="23"></div>
+				</div>
+			</div>
+
+			<div id="AboutThemeTime" class="titlebox"></div>
+			
+			<div id="items">
+				<div id="item">
+					<div class="title" style="width:30%;" id="CategoriesTitle">Категории</div>
+					<textarea id="CategorySettingsInput" style="width:70%;height:76px"></textarea>
+				</div>
+				<div id="item">
+					<div class="title" id="CategoriesAtRunTitle">Категории при запуске</div>
+					<div id="control" style="width:30%;margin-top:-3px;">
+						<input type="checkbox" id="CategoriesAtRunCB" class="checkbox" /><label for="CategoriesAtRunCB" class="switch"></label>
+					</div>
+				</div>
+			</div>
+			
+			<div class="titlebox" style="text-align:center;"><br><span id="DeviceID"></span><br><span id="localstoragesize">-</span><br><br>EasyPlaces<br><span id="LastUpdate"></span> 21.08.25<br><a style="border-bottom:1px dashed var(--title-box-color)" href="https://r57zone.github.io" target="_blank">https://r57zone.github.io</a></div>
+			<br>
+			<div id="items">
+				<div id="item">
+					<div class="title" id="ResetBtn" style="width:95%;" onclick="FullReset()">Полный сброс</div>
+					<div id="control" style="width:5%;">►</div>
+				</div>
+			</div>
+			<br><br>
+		</div>
+	</div>
+	
+	<div id="notification" onclick="this.className='';"></div>
+	<div id="sync-progress"></div>
+</div>
+</body>
+</html>

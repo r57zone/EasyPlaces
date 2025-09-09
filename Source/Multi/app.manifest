@@ -1,0 +1,20 @@
+CACHE MANIFEST
+
+CACHE:
+/langs.js
+/style.css
+/android.css
+/ios.css
+/images/back.png
+/images/close.png
+/images/done.png
+/images/new.png
+/images/rm.png
+/images/settings.png
+/images/sync.png
+/manifest.json
+/icons/icon.png
+/icons/icon-180.png
+
+NETWORK:
+*
