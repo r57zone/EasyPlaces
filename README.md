@@ -63,7 +63,7 @@ Next, for Windows, Android and iOS 13+ apps, you can enable automatic IP address
 [![](https://github.com/user-attachments/assets/1c046f05-e5a7-4bd9-80ef-e6945a98fa76)](https://github.com/user-attachments/assets/39c2f345-2877-441f-8d17-79ffca419323)
 
 ### Android
-[![UI](https://github.com/user-attachments/assets/bbb6e01a-abe3-4b72-bcba-0817f3d88c06)](https://github.com/user-attachments/assets/bbb6e01a-abe3-4b72-bcba-0817f3d88c06)
+[![UI](https://github.com/user-attachments/assets/a0924b91-5cb2-4cbf-93f3-6151392781e0)](https://github.com/user-attachments/assets/a0924b91-5cb2-4cbf-93f3-6151392781e0)
 
 ## Download
 >Versions for Android 7.1+ and Windows 10+. 
