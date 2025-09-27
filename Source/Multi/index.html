@@ -234,10 +234,10 @@
 			if (heading !== null) {
 				let compassRotation = NavInverse ? -(heading + 180) % 360 : -heading;
 				AccumulatedCompassAngle = getAccumulatedAngle(AccumulatedCompassAngle, compassRotation);
-				document.getElementById('compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
+				document.getElementById('Compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
 			} else {
 				AccumulatedCompassAngle = 0;
-				document.getElementById('compass').style.transform = 'rotate(0deg)';
+				document.getElementById('Compass').style.transform = 'rotate(0deg)';
 			}
 		}
 
@@ -255,26 +255,42 @@
 
 		let angle = null;
 
-		// Предпочтение deviceorientationabsolute, если есть
-		if (event.absolute === true && event.alpha !== null)
-			angle = event.alpha;
-		// Специально для iOS (Safari)
-		else if (event.webkitCompassHeading !== undefined)
+		// iOS
+		/*if (event.webkitCompassHeading !== undefined)
 			angle = event.webkitCompassHeading;
-		// Резервный вариант
+		
+		// Android и прочие устройства, если alpha доступен
 		else if (event.alpha !== null)
-			angle = event.alpha;
-
+			angle = Math.abs(event.alpha - 360);*/
+			
+		if (DevicePlatform != PlatformIOS)
+			angle = 360 - event.alpha;
+		else
+			angle = event.webkitCompassHeading;
+		
 		// Поворачиваем элемент
 		if (angle !== null) {
 			AccumulatedCompassAngle = getAccumulatedAngle(AccumulatedCompassAngle, -angle);
-			document.getElementById('compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
+			document.getElementById('Compass').style.transform = 'rotate(' + AccumulatedCompassAngle + 'deg)';
 		}
 	}
+	
+	/*function iOSRequestRights() {
+		if (typeof DeviceOrientationEvent !== 'undefined' &&
+			typeof DeviceOrientationEvent.requestPermission === 'function') {
+			DeviceOrientationEvent.requestPermission()
+				.then((response) => {
+					//if (response != 'granted') {
+						//alert('Permissions are required for navigation');
+				})
+				.catch(() => alert('Not supported'));
+		}
+	}*/
 
 	function StartNavigation() {
 		//if (DevicePlatform == PlatformIOS)
 				//iOSRequestRights();
+				
 		let CoordsTemp = document.getElementById('Coords').value.trim();
 		if (CoordsTemp == '' || CoordsTemp.indexOf(',') === -1) return;
 		CoordsTemp = CoordsTemp.split(',');
@@ -285,7 +301,7 @@
 		// Сброс поворотов
 		AccumulatedCompassAngle = 0;
 		AccumulatedArrowAngle = 0;
-		
+				
 		//alert(CurTarget.lat + '\n' + CurTarget.lon);
 		if (navigator.geolocation) {
 			document.getElementById('StartStopNav').innerHTML = IDS_STOP
@@ -307,38 +323,7 @@
 			document.getElementById('StartStopNav').innerHTML = IDS_START;
 		}
 	}
-	
-	/*function iOSRequestRights() {
-		if (DevicePlatform != PlatformIOS) return;
-
-		// Разрешение на компас/гиро (iOS 13+)
-		try {
-			if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-				DeviceOrientationEvent.requestPermission()
-				.then(function(state){
-					if (state === 'granted')
-						alert('Спасибо! Доступ к компасу разрешён ✅');
-					else
-						alert('Ошибка: доступ к компасу отклонён ❌');
-				})
-				.catch(function(){});
-			}
-		// Для движения:
-		if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
-			DeviceMotionEvent.requestPermission().catch(function(){});
-		} catch (e) {}
-
-		// Геолокация — один раз дергаем, чтобы показать системный диалог
-		try {
-			if (navigator.geolocation) {
-				navigator.geolocation.getCurrentPosition(
-					function(){}, function(){},
-					{ enableHighAccuracy: true, maximumAge: 0, timeout: 1000 }
-				);
-			}
-		} catch (e) {}
-	}*/
-	
+		
 	function StartStopNavigation() {
 		if (WatchId == null)
 			StartNavigation();
@@ -570,14 +555,15 @@
 		document.getElementById('place').style.display = 'block';
 		
 		document.getElementById('PlaceTitle').value = IDS_NEW_PLACE;
-		
+		document.getElementById('Arrow').style.transform = 'rotate(0deg)';
+		document.getElementById('Compass').style.transform = 'rotate(0deg)';
 		document.getElementById('PlaceDistance').innerHTML = '0 ' + IDS_DISTANCE_UNIT_SMALL;
 		UpdateDistance(0);	 
 		document.getElementById('Coords').value = '0.0, 0.0';
 		document.getElementById('RadiusValue').value = '0';
 		document.getElementById('Radius').value = '0';
 		GetCurrentRadius = 0;
-		document.getElementById('compass').style.transform = 'rotate(0deg)';
+		document.getElementById('Compass').style.transform = 'rotate(0deg)';
 		document.getElementById('Arrow').style.display = 'block';
 		UpdateCategoriesList(); // Сброс
 	}
@@ -669,12 +655,24 @@
 		UseCompass = document.getElementById('UseCompassCB').checked;
 		localStorage.setItem('UseCompass', UseCompass);
 		
-		if (PrevUseCompass)
-			window.removeEventListener('deviceorientationabsolute', handleOrientation);
-		PrevUseCompass = false;
-		if (UseCompass && 'ondeviceorientationabsolute' in window) {
-			window.addEventListener('deviceorientationabsolute', handleOrientation);
-			PrevUseCompass = true;
+		if (PrevUseCompass) {
+			if (DevicePlatform != PlatformIOS)
+				window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+			else
+				window.removeEventListener('deviceorientation', handleOrientation, true);
+			PrevUseCompass = false;
+		}
+		
+		if (UseCompass) {
+			if (DevicePlatform != PlatformIOS) {
+				if ('ondeviceorientationabsolute' in window) {
+					window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+					PrevUseCompass = true;
+				}
+			} else {
+				window.addEventListener('deviceorientation', handleOrientation, true);
+				PrevUseCompass = true;
+			}
 		}
 
 		// Dark Theme
@@ -767,7 +765,8 @@
 			document.getElementById('Arrow').style.display = 'block';
 		}
 		
-		
+		document.getElementById('Arrow').style.transform = 'rotate(0deg)';
+		document.getElementById('Compass').style.transform = 'rotate(0deg)';
 		document.getElementById('PlaceDistance').innerHTML = '0 ' + IDS_DISTANCE_UNIT_SMALL;
 		UpdateDistance(0);	
 		document.getElementById('StatusNav').innerHTML = IDS_OFF;
@@ -1368,7 +1367,7 @@
 		document.getElementById('DistanceUnitSmall').innerHTML = IDS_DISTANCE_UNIT_SMALL;
 		document.getElementById('GetCurrentCoords').innerHTML = IDS_GET_COORDS;
 		document.getElementById('StartStopNav').innerHTML = IDS_START;
-		document.getElementById('compass').style.backgroundImage = 'url(' + IDS_COMPASS_IMG + ')';
+		document.getElementById('Compass').style.backgroundImage = 'url(' + IDS_COMPASS_IMG + ')';
 		
 		document.getElementById('SettingsTitle').innerText = IDS_SETTINGS;
 		
@@ -1496,12 +1495,23 @@
 
 		if (localStorage.getItem('UseCompass') != null)
 			UseCompass = localStorage.getItem('UseCompass') == 'true';
-		else
-			UseCompass = 'ondeviceorientation' in window;
+		else {
+			if (DevicePlatform != PlatformIOS)
+				UseCompass = 'ondeviceorientationabsolute' in window;
+			else
+				UseCompass = true;
+		}
 		document.getElementById('UseCompassCB').checked = UseCompass;
-		if (UseCompass && 'ondeviceorientation' in window) {
-			window.addEventListener('deviceorientation', handleOrientation, true);
-			PrevUseCompass = true;
+		if (UseCompass) {
+			if (DevicePlatform != PlatformIOS) {
+				if ('ondeviceorientationabsolute' in window) {
+					window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+					PrevUseCompass = true;
+				}
+			} else {
+				window.addEventListener('deviceorientation', handleOrientation, true);
+				PrevUseCompass = true;
+			}
 		}
 		
 		// После чтение состояния компаса
@@ -1573,7 +1583,7 @@
 				<div id="StatusNav">Выключено</div>
 				<div id="DatePlace" onclick="ChangeDateTimeStatus()">-</div>
 			</div>
-			<div id="compass">
+			<div id="Compass">
 				<img id="Arrow" src="arrow.png">
 			</div>
 			
@@ -1713,7 +1723,7 @@
 				</div>
 			</div>
 			
-			<div class="titlebox" style="text-align:center;"><br><span id="DeviceID"></span><br><span id="localstoragesize">-</span><br><br>EasyPlaces<br><span id="LastUpdate"></span> 21.08.25<br><a style="border-bottom:1px dashed var(--title-box-color)" href="https://r57zone.github.io" target="_blank">https://r57zone.github.io</a></div>
+			<div class="titlebox" style="text-align:center;"><br><span id="DeviceID"></span><br><span id="localstoragesize">-</span><br><br>EasyPlaces<br><span id="LastUpdate"></span> 26.09.25<br><a style="border-bottom:1px dashed var(--title-box-color)" href="https://r57zone.github.io" target="_blank">https://r57zone.github.io</a></div>
 			<br>
 			<div id="items">
 				<div id="item">

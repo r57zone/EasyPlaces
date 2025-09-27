@@ -109,7 +109,7 @@ a{text-decoration:none; color:gray;}
 
 #place-categories #item:hover{background-color:var(--category-hover-background-color);}
 #place-categories #item:last-child {border-bottom:none;}
-#compass{display:flex; flex-direction:row; align-items:center; transition: transform 0.3s ease-out; justify-content:center; background-image:url(compass.png); width:230px; height:230px; margin:0 auto; background-size:100%;}
+#Compass{display:flex; flex-direction:row; align-items:center; transition: transform 0.3s ease-out; justify-content:center; background-image:url(compass.png); width:230px; height:230px; margin:0 auto; background-size:100%;}
 #Arrow{width:106px; transition: transform 0.3s ease-out;}
 #Coords{border:none; background-color:transparent;}
 #place #items input[type=text]{text-align:right; border:none; background-color:transparent; outline: none;}
